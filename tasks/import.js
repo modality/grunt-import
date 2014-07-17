@@ -20,7 +20,8 @@ module.exports = function(grunt) {
         var options = this.options({
           separator: grunt.util.linefeed,
           banner: '',
-          footer: ''
+          footer: '',
+          paths: {}
         });
 
         // Process banner and footer.
@@ -58,7 +59,7 @@ module.exports = function(grunt) {
           return tmp_arr2;
         }
 
-        var importRecursive = function(filepath)
+        var importRecursive = function(filepath, usePaths)
         {
             var src = grunt.file.read(filepath);
             //var importReg = src.match(/@import ['"](.*)['"]/g);
@@ -77,7 +78,8 @@ module.exports = function(grunt) {
 
                 for(var i in importReg)
                 {
-                    var importpath = importReg[i].replace('@import ','').replace(/"/g,'').replace(/'/g,'');
+                    var importparam = importReg[i].replace('@import ','').replace(/"/g,'').replace(/'/g,'');
+                    var importpath = importparam;
 
                     if(importpath.indexOf('/')!==0)
                     {
@@ -86,15 +88,39 @@ module.exports = function(grunt) {
 
                     if(grunt.file.exists(importpath))
                     {
-                        var isrc = importRecursive(importpath);
+                        var isrc = importRecursive(importpath, usePaths);
                         src = src.split(importReg[i]+';').join(isrc);
                         src = src.split(importReg[i]).join(isrc);
                     }
                     else
                     {
-                        grunt.log.warn('@import file "' + importpath + '" not found.');
-                        src = src.split(importReg[i]+';').join('');
-                        src = src.split(importReg[i]).join('');
+                        var found = false
+                        if(usePaths)
+                        {
+                            for(var p in options.paths)
+                            {
+                                if(importparam.indexOf(p) == 0)
+                                {
+                                    importpath = importparam.replace(p, options.paths[p]);
+
+                                    if(grunt.file.exists(importpath))
+                                    {
+                                        found = true;
+                                        var isrc = importRecursive(importpath, false);
+                                        src = src.split(importReg[i]+';').join(isrc);
+                                        src = src.split(importReg[i]).join(isrc);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if(!found)
+                        {
+                            grunt.log.warn('@import file "' + importpath + '" not found.');
+                            src = src.split(importReg[i]+';').join('');
+                            src = src.split(importReg[i]).join('');
+                        }
                     }
                 }
             }
@@ -118,7 +144,7 @@ module.exports = function(grunt) {
 
           }).map(function(filepath) {
 
-            return importRecursive(filepath);
+            return importRecursive(filepath, true);
 
           }).join(options.separator) + footer;
 
